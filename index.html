@@ -201,6 +201,10 @@ textarea{resize:vertical;min-height:52px;font-size:11px}
 <script type="module">
   import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js";
   import { getAuth, onAuthStateChanged, signOut } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js";
+  import {
+    getFirestore, collection, doc, setDoc, deleteDoc,
+    getDocs, query, where, serverTimestamp
+  } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
 
   const firebaseConfig = {
     apiKey:            "AIzaSyAQWRK6IDmd-lonc0V3daY_abB6HYiuSdU",
@@ -213,6 +217,8 @@ textarea{resize:vertical;min-height:52px;font-size:11px}
 
   const app  = initializeApp(firebaseConfig);
   const auth = getAuth(app);
+  const db   = getFirestore(app);
+  const ESTUDOS_COL = 'estudos_viabilidade';
 
   onAuthStateChanged(auth, user => {
     if (user) {
@@ -220,6 +226,9 @@ textarea{resize:vertical;min-height:52px;font-size:11px}
       document.getElementById('auth-gate').remove();
       const userBadge = document.getElementById('user-badge');
       if (userBadge) userBadge.textContent = user.email || '';
+      window.__currentUid = user.uid;
+      // Avisa o script principal (clássico) que o Firebase já está pronto
+      window.dispatchEvent(new CustomEvent('firebase-ready'));
     } else {
       // Não logado: manda para a tela de login
       window.location.href = 'login.html';
@@ -229,7 +238,53 @@ textarea{resize:vertical;min-height:52px;font-size:11px}
   window.__logout = function(){
     signOut(auth);
   };
+
+  // ── Funções de persistência de Estudos no Firestore ──────────
+  // Cada estudo é salvo como um documento próprio, vinculado ao uid do usuário.
+  // Isso permite acessar os mesmos estudos de qualquer computador, bastando logar.
+  window.__firestoreListarEstudos = async function(){
+    const uid = window.__currentUid;
+    if (!uid) return [];
+    const q = query(collection(db, ESTUDOS_COL), where('uid','==',uid));
+    const snap = await getDocs(q);
+    const lista = [];
+    snap.forEach(d => {
+      const data = d.data();
+      lista.push({
+        id: d.id,
+        nome: data.nome,
+        criadoEm: data.criadoEm && data.criadoEm.toMillis ? data.criadoEm.toMillis() : (data.criadoEmMs||Date.now()),
+        atualizadoEm: data.atualizadoEm && data.atualizadoEm.toMillis ? data.atualizadoEm.toMillis() : (data.atualizadoEmMs||Date.now()),
+        estado: data.estado
+      });
+    });
+    return lista;
+  };
+
+  window.__firestoreSalvarEstudo = async function(id, nome, estado, isNovo){
+    const uid = window.__currentUid;
+    if (!uid) throw new Error('Usuário não autenticado.');
+    const ref = isNovo ? doc(collection(db, ESTUDOS_COL)) : doc(db, ESTUDOS_COL, id);
+    const payload = {
+      uid: uid,
+      nome: nome,
+      estado: estado,
+      atualizadoEm: serverTimestamp(),
+      atualizadoEmMs: Date.now()
+    };
+    if (isNovo) {
+      payload.criadoEm = serverTimestamp();
+      payload.criadoEmMs = Date.now();
+    }
+    await setDoc(ref, payload, { merge: !isNovo });
+    return ref.id;
+  };
+
+  window.__firestoreExcluirEstudo = async function(id){
+    await deleteDoc(doc(db, ESTUDOS_COL, id));
+  };
 </script>
+
 
 <div class="page">
 
@@ -435,7 +490,7 @@ textarea{resize:vertical;min-height:52px;font-size:11px}
       </select>
     </div>
     <div>
-      <label>AFRMM</label>
+      <label>Frete Mar&#237;timo</label>
       <span class="sis-badge" id="afrmm-badge" style="display:block;margin-top:6px">Aplic&#225;vel (8% + R$20)</span>
     </div>
   </div>
@@ -745,7 +800,7 @@ function calcular(){
     +'<tr><td class="lk">PORTO DESTINO:</td><td>'+gs('f_pdest')+'</td><td class="sep"></td><td class="key">FRETE (USD)</td><td class="val">'+fU(freteUSD)+'</td></tr>'
     +'<tr><td class="lk">INVOICE(S):</td><td>'+gs('f_inv')+'</td><td class="sep"></td><td class="key">VALOR ADUANEIRO (R$)</td><td class="val" style="font-weight:700">'+fR(totalCIF_BRL)+'</td></tr>'
     +'<tr><td class="lk">SISCOMEX:</td><td>'+adicoes+' adi&#231;&#245;es</td><td class="sep"></td><td class="key">TAXA SISCOMEX (R$)</td><td class="val" style="font-weight:700">'+fR(sisTotal)+'</td></tr>'
-    +'<tr><td class="lk">MODAL:</td><td>'+(modal==='aereo'?'A&#233;reo':'Mar&#237;timo')+'</td><td class="sep"></td><td class="key">AFRMM (R$)</td><td class="val" style="font-weight:700">'+(modal==='aereo'?'N&#227;o aplic&#225;vel':fR(afrmmTotal))+'</td></tr>';
+    +'<tr><td class="lk">MODAL:</td><td>'+(modal==='aereo'?'A&#233;reo':'Mar&#237;timo')+'</td><td class="sep"></td><td class="key">FRETE MAR&#205;TIMO (R$)</td><td class="val" style="font-weight:700">'+(modal==='aereo'?'N&#227;o aplic&#225;vel':fR(afrmmTotal))+'</td></tr>';
 
   // RATEIO
   var rt='<thead><tr>'
@@ -780,7 +835,7 @@ function calcular(){
         +'<div class="trow"><span class="lbl">PIS<span class="aliq">'+fp(x.pisA)+'</span></span><span class="val">'+fR(x.pis)+'</span></div>'
         +'<div class="trow"><span class="lbl">COFINS<span class="aliq">'+fp(x.cofA)+'</span></span><span class="val">'+fR(x.cofins)+'</span></div>'
         +'<div class="trow"><span class="lbl">Taxa Siscomex (rateado pelo CIF)<span class="aliq">proporcional</span></span><span class="val">'+fR(x.sisItem)+'</span></div>'
-        +'<div class="trow"><span class="lbl">AFRMM<span class="aliq">'+(modal==='aereo'?'N&atilde;o aplic&aacute;vel (modal a&eacute;reo)':'Frete&times;C&acirc;mbio&times;8%+R$20 rateado')+'</span></span><span class="val">'+fR(x.afrmmItem)+'</span></div>'
+        +'<div class="trow"><span class="lbl">Frete Mar&#237;timo<span class="aliq">'+(modal==='aereo'?'N&atilde;o aplic&aacute;vel (modal a&eacute;reo)':'Frete&times;C&acirc;mbio&times;8%+R$20 rateado')+'</span></span><span class="val">'+fR(x.afrmmItem)+'</span></div>'
         +'<div class="trow"><span class="lbl">'+icmsLabel+'<span class="aliq">'+fp(x.icmsA)+'</span></span><span class="val">'+fR(x.icms)+'</span></div>'
         +'<div class="tsub"><span>Subtotal impostos &#8212; '+x.inv+' / NCM '+x.ncm+'</span><span>'+fR(x.totalImp)+'</span></div>'
       +'</div></div>';
@@ -808,7 +863,7 @@ function calcular(){
           +'<div class="trow"><span class="lbl">PIS</span><span class="val">'+fR(n2.pis)+'</span></div>'
           +'<div class="trow"><span class="lbl">COFINS</span><span class="val">'+fR(n2.cofins)+'</span></div>'
           +'<div class="trow"><span class="lbl">Taxa Siscomex</span><span class="val">'+fR(n2.sis)+'</span></div>'
-          +'<div class="trow"><span class="lbl">AFRMM</span><span class="val">'+fR(n2.afrmm)+'</span></div>'
+          +'<div class="trow"><span class="lbl">Frete Mar&#237;timo</span><span class="val">'+fR(n2.afrmm)+'</span></div>'
           +'<div class="trow"><span class="lbl">ICMS</span><span class="val">'+fR(n2.icms)+'</span></div>'
           +'<div class="ncm-total-sub"><span>IMPOSTO TOTAL NCM '+n2.ncm+'</span><span>'+fR(n2.total)+'</span></div>'
         +'</div></div>';
@@ -830,7 +885,7 @@ function calcular(){
     +'<th class="L">N&#186;</th><th class="L">NCM</th><th class="L">Descri&ccedil;&atilde;o</th>'
     +'<th>Qtd</th><th>% Rateio</th><th>VMLE (R$)</th><th>Frete Rat. (R$)</th><th>CIF (R$)</th>'
     +'<th>II (R$)</th><th>IPI (R$)</th><th>PIS (R$)</th><th>COFINS (R$)</th>'
-    +'<th>Siscomex</th><th>AFRMM</th>';
+    +'<th>Siscomex</th><th>Frete Mar&#237;timo</th>';
   despCols.forEach(function(d){rdHtml+='<th>'+d.nom+'</th>';});
   rdHtml+='<th>Imp. Fed+Est (R$)</th><th>Desp. Gerais (R$)</th><th>Custo Total (R$)</th><th>Custo Unit. (R$)</th></tr></thead><tbody>';
   var totRD={vmle:0,fp:0,cif:0,ii:0,ipi:0,pis:0,cofins:0,sis:0,afrmm:0,imp:0,desp:0,total:0};
@@ -880,7 +935,7 @@ function calcular(){
   document.getElementById('grand-total').innerHTML=
     '<div class="gt-lbl">TOTAL DE IMPOSTOS (FEDERAIS + ESTADUAIS) + DESPESAS</div>'
     +'<div class="gt-val">'+fR(grandTotal)+'</div>'
-    +'<div class="gt-sub">DATA: '+hoje+' &nbsp;&middot;&nbsp; C&acirc;mbio: R$ '+cambio.toFixed(4)+' &nbsp;&middot;&nbsp; Siscomex ('+adicoes+' adi&ccedil;&otilde;es): '+fR(sisTotal)+' &nbsp;&middot;&nbsp; AFRMM: '+fR(afrmmTotal)+'</div>';
+    +'<div class="gt-sub">DATA: '+hoje+' &nbsp;&middot;&nbsp; C&acirc;mbio: R$ '+cambio.toFixed(4)+' &nbsp;&middot;&nbsp; Siscomex ('+adicoes+' adi&ccedil;&otilde;es): '+fR(sisTotal)+' &nbsp;&middot;&nbsp; Frete Mar&#237;timo: '+fR(afrmmTotal)+'</div>';
 
   // CUSTO UNITÁRIO POR NCM + GERAL
   // Custo por NCM: só exibe se o NCM tiver qtdItem preenchida
@@ -990,15 +1045,15 @@ function confirmarXLSX(){
     rows.push(['FOB Total (USD):',c.totalFOB_USD,'','FOB Total (R$):',c.totalFOB_BRL]);
     rows.push(['Frete (USD):',c.freteUSD,'','Frete (R$):',c.freteBRL]);
     rows.push(['Valor Aduaneiro (R$):',c.totalCIF_BRL,'','Siscomex ('+c.adicoes+' adicoes):',c.sisTotal]);
-    rows.push(['AFRMM (R$):',c.afrmmTotal,'','Modal:',(c.modal==='aereo'?'Aereo':'Maritimo')]);
+    rows.push(['Frete Maritimo (R$):',c.afrmmTotal,'','Modal:',(c.modal==='aereo'?'Aereo':'Maritimo')]);
     rows.push([]);
-    var hdr=['No','NCM','Descricao','Qtd (pcs)','% Rateio (FOB)',
+    var hdr=['No','NCM','Descricao','Qtd (pcs)','% Rateio (FOB)','VMLE (USD)',
       'VMLE (R$)','Frete Rat. (R$)','Valor CIF (R$)',
-      'II (R$)','IPI (R$)','PIS (R$)','COFINS (R$)','Siscomex (R$)','AFRMM (R$)'];
+      'II (R$)','IPI (R$)','PIS (R$)','COFINS (R$)','Siscomex (R$)','Frete Maritimo (R$)'];
     c.despCols.forEach(function(d){hdr.push(d.nom.replace(/&[^;]+;/g,'')+' (R$)');});
     hdr.push('Imp. Fed+Est (R$)','Despesas Gerais (R$)','Custo Total (R$)','Custo Unit. (R$)');
     rows.push(hdr);
-    var totRow={vmle:0,fp:0,cif:0,ii:0,ipi:0,pis:0,cofins:0,sis:0,afrmm:0,imp:0,desp:0,total:0};
+    var totRow={vmleUsd:0,vmle:0,fp:0,cif:0,ii:0,ipi:0,pis:0,cofins:0,sis:0,afrmm:0,imp:0,desp:0,total:0};
     var despColTotals=c.despCols.map(function(){return 0;});
     c.itemData.forEach(function(x,idx){
       var pct=c.totalFOB_USD>0?(x.fobUSD/c.totalFOB_USD*100):0;
@@ -1008,17 +1063,17 @@ function confirmarXLSX(){
       });
       var custoTotal=x.totalImp+despItem;
       var custoUnit=x.qtdItem>0?custoTotal/x.qtdItem:null;
-      var row=[idx+1,x.ncm,x.desc,x.qtdItem||null,pct/100,
+      var row=[idx+1,x.ncm,x.desc,x.qtdItem||null,pct/100,x.fobUSD,
         x.fobBRL,x.fpBRL,x.cifBRL,x.ii,x.ipi,x.pis,x.cofins,x.sisItem,x.afrmmItem];
       despItemVals.forEach(function(v,i){row.push(v);despColTotals[i]+=v;});
       row.push(x.totalImp,despItem,custoTotal,custoUnit);
-      totRow.vmle+=x.fobBRL;totRow.fp+=x.fpBRL;totRow.cif+=x.cifBRL;
+      totRow.vmleUsd+=x.fobUSD;totRow.vmle+=x.fobBRL;totRow.fp+=x.fpBRL;totRow.cif+=x.cifBRL;
       totRow.ii+=x.ii;totRow.ipi+=x.ipi;totRow.pis+=x.pis;totRow.cofins+=x.cofins;
       totRow.sis+=x.sisItem;totRow.afrmm+=x.afrmmItem;totRow.imp+=x.totalImp;
       totRow.desp+=despItem;totRow.total+=custoTotal;
       rows.push(row);
     });
-    var totLine=['TOTAIS','','',null,1,totRow.vmle,totRow.fp,totRow.cif,
+    var totLine=['TOTAIS','','',null,1,totRow.vmleUsd,totRow.vmle,totRow.fp,totRow.cif,
       totRow.ii,totRow.ipi,totRow.pis,totRow.cofins,totRow.sis,totRow.afrmm];
     despColTotals.forEach(function(v){totLine.push(v);});
     totLine.push(totRow.imp,totRow.desp,totRow.total,null);
@@ -1030,7 +1085,7 @@ function confirmarXLSX(){
     rows.push(['TOTAL GLOBAL (Impostos + Despesas)',c.grandTotal]);
     rows.push(['Custo Unitario Geral (div '+c.qtdTotal+' unidades)',c.unitarioGeral]);
     var ws=XLSX.utils.aoa_to_sheet(rows);
-    ws['!cols']=[{wch:4},{wch:12},{wch:28},{wch:10},{wch:12},
+    ws['!cols']=[{wch:4},{wch:12},{wch:28},{wch:10},{wch:12},{wch:13},
       {wch:14},{wch:14},{wch:14},{wch:13},{wch:13},{wch:13},{wch:13},{wch:13},{wch:13}];
     c.despCols.forEach(function(){ws['!cols'].push({wch:18});});
     ws['!cols'].push({wch:22},{wch:18},{wch:16},{wch:14});
@@ -1044,31 +1099,19 @@ function confirmarXLSX(){
 }
 
 /* =========================================================
-   ESTUDOS SALVOS (persistência local no navegador)
+   ESTUDOS SALVOS (persistência na nuvem via Firestore)
    Captura todo o estado do formulário (não apenas o resultado
-   calculado) para permitir reabrir e editar depois.
+   calculado) para permitir reabrir e editar depois, de qualquer
+   computador, bastando estar logado.
    ========================================================= */
-var ESTUDOS_KEY='agil_estudos_viabilidade_v1';
 var estudoAtualId=null;
+var estudosCache=[]; // cache em memória da última listagem, usado para renderizar a UI
 
 function showToast(msg){
   var t=document.getElementById('save-toast');
   t.textContent=msg;t.classList.add('show');
   clearTimeout(t._tm);
   t._tm=setTimeout(function(){t.classList.remove('show');},2600);
-}
-
-function lerEstudos(){
-  try{
-    var raw=localStorage.getItem(ESTUDOS_KEY);
-    return raw?JSON.parse(raw):[];
-  }catch(e){return [];}
-}
-function gravarEstudos(lista){
-  try{
-    localStorage.setItem(ESTUDOS_KEY,JSON.stringify(lista));
-    return true;
-  }catch(e){alert('Não foi possível salvar: '+e.message);return false;}
 }
 
 // Captura o estado atual de TODO o formulário (dados gerais, frete/câmbio,
@@ -1137,12 +1180,22 @@ function restaurarEstadoForm(st){
   window.scrollTo({top:0,behavior:'smooth'});
 }
 
-function abrirModalEstudos(){
+async function abrirModalEstudos(){
   document.getElementById('estudo-nome-novo').value='';
+  var wrap=document.getElementById('estudos-list');
+  wrap.innerHTML='<div class="estudos-empty">Carregando estudos…</div>';
+  document.getElementById('modal-estudos').classList.add('show');
+
+  try{
+    estudosCache=await window.__firestoreListarEstudos();
+  }catch(e){
+    wrap.innerHTML='<div class="estudos-empty">Erro ao carregar estudos: '+escHtml(e.message)+'</div>';
+    return;
+  }
+
   var updRow=document.getElementById('estudo-update-row');
   if(estudoAtualId){
-    var lista=lerEstudos();
-    var atual=lista.find(function(e){return e.id===estudoAtualId;});
+    var atual=estudosCache.find(function(e){return e.id===estudoAtualId;});
     if(atual){
       updRow.style.display='flex';
       updRow.querySelector('button').textContent='\uD83D\uDCBE Atualizar "'+atual.nome+'"';
@@ -1154,7 +1207,6 @@ function abrirModalEstudos(){
     updRow.style.display='none';
   }
   renderListaEstudos();
-  document.getElementById('modal-estudos').classList.add('show');
 }
 function fecharModalEstudos(){document.getElementById('modal-estudos').classList.remove('show');}
 
@@ -1165,14 +1217,13 @@ function escHtml(s){
 }
 
 function renderListaEstudos(){
-  var lista=lerEstudos();
   var wrap=document.getElementById('estudos-list');
-  if(!lista.length){
+  if(!estudosCache.length){
     wrap.innerHTML='<div class="estudos-empty">Nenhum estudo salvo ainda.<br>Preencha o formulário e clique em "Salvar como novo".</div>';
     return;
   }
   // mais recentes primeiro
-  var ordenada=lista.slice().sort(function(a,b){return (b.atualizadoEm||0)-(a.atualizadoEm||0);});
+  var ordenada=estudosCache.slice().sort(function(a,b){return (b.atualizadoEm||0)-(a.atualizadoEm||0);});
   var html='';
   ordenada.forEach(function(e){
     var dt=e.atualizadoEm?new Date(e.atualizadoEm).toLocaleDateString('pt-BR')+' '+new Date(e.atualizadoEm).toLocaleTimeString('pt-BR',{hour:'2-digit',minute:'2-digit'}):'';
@@ -1201,42 +1252,53 @@ document.addEventListener('click',function(ev){
   else if(action==='del')excluirEstudo(id);
 });
 
-function salvarEstudoAtual(){
+async function salvarEstudoAtual(){
   var nomeInput=document.getElementById('estudo-nome-novo').value.trim();
   var estado=capturarEstadoForm();
   if(!estado.itens.length){alert('Adicione ao menos um item antes de salvar.');return;}
   var nome=nomeInput||(estado.imp||'Estudo sem nome')+(estado.inv?(' — '+estado.inv):'');
-  var lista=lerEstudos();
-  var id='est_'+Date.now()+'_'+Math.floor(Math.random()*1000);
-  lista.push({id:id,nome:nome,criadoEm:Date.now(),atualizadoEm:Date.now(),estado:estado});
-  if(gravarEstudos(lista)){
-    estudoAtualId=id;
+  var btn=document.getElementById('estudo-nome-novo').nextElementSibling;
+  var textoOriginal=btn?btn.textContent:'';
+  if(btn){btn.disabled=true;btn.textContent='Salvando…';}
+  try{
+    var novoId=await window.__firestoreSalvarEstudo(null,nome,estado,true);
+    estudoAtualId=novoId;
     showToast('Estudo "'+nome+'" salvo com sucesso.');
     document.getElementById('estudo-nome-novo').value='';
     var updRow=document.getElementById('estudo-update-row');
     updRow.style.display='flex';
     updRow.querySelector('button').textContent='\uD83D\uDCBE Atualizar "'+nome+'"';
+    estudosCache=await window.__firestoreListarEstudos();
     renderListaEstudos();
+  }catch(e){
+    alert('Não foi possível salvar o estudo: '+e.message);
+  }finally{
+    if(btn){btn.disabled=false;btn.textContent=textoOriginal;}
   }
 }
 
 // Salva alterações sobre um estudo já existente (mesmo id), preservando o histórico de criação
-function atualizarEstudoExistente(id){
+async function atualizarEstudoExistente(id){
   var estado=capturarEstadoForm();
   if(!estado.itens.length){alert('Adicione ao menos um item antes de salvar.');return;}
-  var lista=lerEstudos();
-  var idx=lista.findIndex(function(e){return e.id===id;});
-  if(idx===-1){alert('Estudo não encontrado (pode ter sido excluído).');return;}
-  lista[idx].estado=estado;
-  lista[idx].atualizadoEm=Date.now();
-  if(gravarEstudos(lista)){
-    showToast('Estudo "'+lista[idx].nome+'" atualizado com sucesso.');
+  var atual=estudosCache.find(function(e){return e.id===id;});
+  var nome=atual?atual.nome:'Estudo';
+  var updRow=document.getElementById('estudo-update-row');
+  var btn=updRow.querySelector('button');
+  var textoOriginal=btn.textContent;
+  btn.disabled=true;btn.textContent='Atualizando…';
+  try{
+    await window.__firestoreSalvarEstudo(id,nome,estado,false);
+    showToast('Estudo "'+nome+'" atualizado com sucesso.');
+  }catch(e){
+    alert('Não foi possível atualizar o estudo: '+e.message);
+  }finally{
+    btn.disabled=false;btn.textContent=textoOriginal;
   }
 }
 
-function carregarEstudo(id){
-  var lista=lerEstudos();
-  var item=lista.find(function(e){return e.id===id;});
+async function carregarEstudo(id){
+  var item=estudosCache.find(function(e){return e.id===id;});
   if(!item){alert('Estudo não encontrado.');return;}
   if(items.length&&!confirm('Carregar este estudo vai substituir os dados atuais do formulário. Deseja continuar?')){return;}
   restaurarEstadoForm(item.estado);
@@ -1245,15 +1307,18 @@ function carregarEstudo(id){
   showToast('Estudo "'+item.nome+'" carregado. Altere e clique em Estudos Salvos > Atualizar para regravar.');
 }
 
-function excluirEstudo(id){
-  var lista=lerEstudos();
-  var item=lista.find(function(e){return e.id===id;});
+async function excluirEstudo(id){
+  var item=estudosCache.find(function(e){return e.id===id;});
   if(!item)return;
   if(!confirm('Excluir o estudo "'+item.nome+'"? Esta ação não pode ser desfeita.'))return;
-  lista=lista.filter(function(e){return e.id!==id;});
-  gravarEstudos(lista);
-  if(estudoAtualId===id)estudoAtualId=null;
-  renderListaEstudos();
+  try{
+    await window.__firestoreExcluirEstudo(id);
+    estudosCache=estudosCache.filter(function(e){return e.id!==id;});
+    if(estudoAtualId===id)estudoAtualId=null;
+    renderListaEstudos();
+  }catch(e){
+    alert('Não foi possível excluir o estudo: '+e.message);
+  }
 }
 
 addItem();
