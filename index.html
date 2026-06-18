@@ -798,7 +798,7 @@ function calcular(){
     +'<tr><td class="lk">PORTO DESTINO:</td><td>'+gs('f_pdest')+'</td><td class="sep"></td><td class="key">FRETE (USD)</td><td class="val">'+fU(freteUSD)+'</td></tr>'
     +'<tr><td class="lk">INVOICE(S):</td><td>'+gs('f_inv')+'</td><td class="sep"></td><td class="key">VALOR ADUANEIRO (R$)</td><td class="val" style="font-weight:700">'+fR(totalCIF_BRL)+'</td></tr>'
     +'<tr><td class="lk">SISCOMEX:</td><td>'+adicoes+' adi&#231;&#245;es</td><td class="sep"></td><td class="key">TAXA SISCOMEX (R$)</td><td class="val" style="font-weight:700">'+fR(sisTotal)+'</td></tr>'
-    +'<tr><td class="lk">MODAL:</td><td>'+(modal==='aereo'?'A&#233;reo':'Mar&#237;timo')+'</td><td class="sep"></td><td class="key">FRETE MAR&#205;TIMO (R$)</td><td class="val" style="font-weight:700">'+(modal==='aereo'?'N&#227;o aplic&#225;vel':fR(afrmmTotal))+'</td></tr>';
+    +'<tr><td class="lk">MODAL:</td><td>'+(modal==='aereo'?'A&#233;reo':'Mar&#237;timo')+'</td><td class="sep"></td><td class="key">AFRMM (R$)</td><td class="val" style="font-weight:700">'+(modal==='aereo'?'N&#227;o aplic&#225;vel':fR(afrmmTotal))+'</td></tr>';
 
   // RATEIO
   var rt='<thead><tr>'
@@ -833,7 +833,7 @@ function calcular(){
         +'<div class="trow"><span class="lbl">PIS<span class="aliq">'+fp(x.pisA)+'</span></span><span class="val">'+fR(x.pis)+'</span></div>'
         +'<div class="trow"><span class="lbl">COFINS<span class="aliq">'+fp(x.cofA)+'</span></span><span class="val">'+fR(x.cofins)+'</span></div>'
         +'<div class="trow"><span class="lbl">Taxa Siscomex (rateado pelo CIF)<span class="aliq">proporcional</span></span><span class="val">'+fR(x.sisItem)+'</span></div>'
-        +'<div class="trow"><span class="lbl">Frete Mar&#237;timo<span class="aliq">'+(modal==='aereo'?'N&atilde;o aplic&aacute;vel (modal a&eacute;reo)':'Frete&times;C&acirc;mbio&times;8%+R$20 rateado')+'</span></span><span class="val">'+fR(x.afrmmItem)+'</span></div>'
+        +'<div class="trow"><span class="lbl">AFRMM<span class="aliq">'+(modal==='aereo'?'N&atilde;o aplic&aacute;vel (modal a&eacute;reo)':'Frete&times;C&acirc;mbio&times;8%+R$20 rateado')+'</span></span><span class="val">'+fR(x.afrmmItem)+'</span></div>'
         +'<div class="trow"><span class="lbl">'+icmsLabel+'<span class="aliq">'+fp(x.icmsA)+'</span></span><span class="val">'+fR(x.icms)+'</span></div>'
         +'<div class="tsub"><span>Subtotal impostos &#8212; '+x.inv+' / NCM '+x.ncm+'</span><span>'+fR(x.totalImp)+'</span></div>'
       +'</div></div>';
@@ -861,7 +861,7 @@ function calcular(){
           +'<div class="trow"><span class="lbl">PIS</span><span class="val">'+fR(n2.pis)+'</span></div>'
           +'<div class="trow"><span class="lbl">COFINS</span><span class="val">'+fR(n2.cofins)+'</span></div>'
           +'<div class="trow"><span class="lbl">Taxa Siscomex</span><span class="val">'+fR(n2.sis)+'</span></div>'
-          +'<div class="trow"><span class="lbl">Frete Mar&#237;timo</span><span class="val">'+fR(n2.afrmm)+'</span></div>'
+          +'<div class="trow"><span class="lbl">AFRMM</span><span class="val">'+fR(n2.afrmm)+'</span></div>'
           +'<div class="trow"><span class="lbl">ICMS</span><span class="val">'+fR(n2.icms)+'</span></div>'
           +'<div class="ncm-total-sub"><span>IMPOSTO TOTAL NCM '+n2.ncm+'</span><span>'+fR(n2.total)+'</span></div>'
         +'</div></div>';
@@ -881,9 +881,9 @@ function calcular(){
   var despCols=despList.filter(function(d){return d.val>0;});
   var rdHtml='<thead><tr>'
     +'<th class="L">N&#186;</th><th class="L">NCM</th><th class="L">Descri&ccedil;&atilde;o</th>'
-    +'<th>Qtd</th><th>% Rateio</th><th>VMLE (R$)</th><th>Frete Rat. (R$)</th><th>CIF (R$)</th>'
+    +'<th>Qtd</th><th>% Rateio</th><th>VMLE (USD)</th><th>VMLE (R$)</th><th>Frete Rat. (R$)</th><th>CIF (R$)</th>'
     +'<th>II (R$)</th><th>IPI (R$)</th><th>PIS (R$)</th><th>COFINS (R$)</th>'
-    +'<th>Siscomex</th><th>Frete Mar&#237;timo</th>';
+    +'<th>Siscomex</th><th>AFRMM</th>';
   despCols.forEach(function(d){rdHtml+='<th>'+d.nom+'</th>';});
   rdHtml+='<th>Imp. Fed+Est (R$)</th><th>Desp. Gerais (R$)</th><th>Custo Total (R$)</th><th>Custo Unit. (R$)</th></tr></thead><tbody>';
   var totRD={vmle:0,fp:0,cif:0,ii:0,ipi:0,pis:0,cofins:0,sis:0,afrmm:0,imp:0,desp:0,total:0};
@@ -905,6 +905,7 @@ function calcular(){
       +'<td class="L">'+(idx+1)+'</td><td class="L">'+x.ncm+'</td><td class="L">'+x.desc+'</td>'
       +'<td>'+(x.qtdItem>0?x.qtdItem.toLocaleString('pt-BR'):'-')+'</td>'
       +'<td>'+fPct(pct)+'</td>'
+      +'<td>'+fU(x.fobUSD)+'</td>'
       +'<td>'+fR(x.fobBRL)+'</td><td>'+fR(x.fpBRL)+'</td><td>'+fR(x.cifBRL)+'</td>'
       +'<td>'+fR(x.ii)+'</td><td>'+fR(x.ipi)+'</td><td>'+fR(x.pis)+'</td><td>'+fR(x.cofins)+'</td>'
       +'<td>'+fR(x.sisItem)+'</td><td>'+fR(x.afrmmItem)+'</td>';
@@ -917,6 +918,7 @@ function calcular(){
   });
   rdHtml+='<tr class="ttr"><td class="L" colspan="3">TOTAIS</td>'
     +'<td>-</td><td>100,00%</td>'
+    +'<td>'+fU(totalFOB_USD)+'</td>'
     +'<td>'+fR(totRD.vmle)+'</td><td>'+fR(totRD.fp)+'</td><td>'+fR(totRD.cif)+'</td>'
     +'<td>'+fR(totRD.ii)+'</td><td>'+fR(totRD.ipi)+'</td><td>'+fR(totRD.pis)+'</td><td>'+fR(totRD.cofins)+'</td>'
     +'<td>'+fR(totRD.sis)+'</td><td>'+fR(totRD.afrmm)+'</td>';
@@ -933,7 +935,7 @@ function calcular(){
   document.getElementById('grand-total').innerHTML=
     '<div class="gt-lbl">TOTAL DE IMPOSTOS (FEDERAIS + ESTADUAIS) + DESPESAS</div>'
     +'<div class="gt-val">'+fR(grandTotal)+'</div>'
-    +'<div class="gt-sub">DATA: '+hoje+' &nbsp;&middot;&nbsp; C&acirc;mbio: R$ '+cambio.toFixed(4)+' &nbsp;&middot;&nbsp; Siscomex ('+adicoes+' adi&ccedil;&otilde;es): '+fR(sisTotal)+' &nbsp;&middot;&nbsp; Frete Mar&#237;timo: '+fR(afrmmTotal)+'</div>';
+    +'<div class="gt-sub">DATA: '+hoje+' &nbsp;&middot;&nbsp; C&acirc;mbio: R$ '+cambio.toFixed(4)+' &nbsp;&middot;&nbsp; Siscomex ('+adicoes+' adi&ccedil;&otilde;es): '+fR(sisTotal)+' &nbsp;&middot;&nbsp; AFRMM: '+fR(afrmmTotal)+'</div>';
 
   // CUSTO UNITÁRIO POR NCM + GERAL
   // Custo por NCM: só exibe se o NCM tiver qtdItem preenchida
@@ -1043,11 +1045,11 @@ function confirmarXLSX(){
     rows.push(['FOB Total (USD):',c.totalFOB_USD,'','FOB Total (R$):',c.totalFOB_BRL]);
     rows.push(['Frete (USD):',c.freteUSD,'','Frete (R$):',c.freteBRL]);
     rows.push(['Valor Aduaneiro (R$):',c.totalCIF_BRL,'','Siscomex ('+c.adicoes+' adicoes):',c.sisTotal]);
-    rows.push(['Frete Maritimo (R$):',c.afrmmTotal,'','Modal:',(c.modal==='aereo'?'Aereo':'Maritimo')]);
+    rows.push(['AFRMM (R$):',c.afrmmTotal,'','Modal:',(c.modal==='aereo'?'Aereo':'Maritimo')]);
     rows.push([]);
     var hdr=['No','NCM','Descricao','Qtd (pcs)','% Rateio (FOB)','VMLE (USD)',
       'VMLE (R$)','Frete Rat. (R$)','Valor CIF (R$)',
-      'II (R$)','IPI (R$)','PIS (R$)','COFINS (R$)','Siscomex (R$)','Frete Maritimo (R$)'];
+      'II (R$)','IPI (R$)','PIS (R$)','COFINS (R$)','Siscomex (R$)','AFRMM (R$)'];
     c.despCols.forEach(function(d){hdr.push(d.nom.replace(/&[^;]+;/g,'')+' (R$)');});
     hdr.push('Imp. Fed+Est (R$)','Despesas Gerais (R$)','Custo Total (R$)','Custo Unit. (R$)');
     rows.push(hdr);
