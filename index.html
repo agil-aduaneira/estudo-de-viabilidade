@@ -208,7 +208,7 @@ textarea{resize:vertical;min-height:52px;font-size:11px}
   import { getAuth, onAuthStateChanged, signOut } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js";
   import {
     getFirestore, collection, doc, setDoc, deleteDoc, getDoc,
-    getDocs, query, where, serverTimestamp
+    getDocs, query, where, limit, documentId, serverTimestamp
   } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
 
   const firebaseConfig = {
@@ -295,6 +295,22 @@ textarea{resize:vertical;min-height:52px;font-size:11px}
       const snap = await getDoc(doc(db, 'ncm_aliquotas', ncm8));
       return snap.exists() ? snap.data() : null;
     } catch(e) { console.warn('buscarNCM:', e); return null; }
+  };
+
+  // Buscar NCMs por prefixo (autocomplete)
+  window.__buscarNCMPrefixo = async function(prefixo) {
+    try {
+      const q = query(
+        collection(db, 'ncm_aliquotas'),
+        where(documentId(), '>=', prefixo),
+        where(documentId(), '<', prefixo + ''),
+        limit(8)
+      );
+      const snap = await getDocs(q);
+      const out = [];
+      snap.forEach(d => out.push({ ncm: d.id, ...d.data() }));
+      return out;
+    } catch(e) { console.warn('buscarNCMPrefixo:', e); return []; }
   };
 </script>
 
@@ -693,8 +709,9 @@ function addItem(cf){
       +'<div><label>Descri&#231;&#227;o do produto</label><input type="text" id="i_desc-'+id+'" placeholder="Ex: CBB61-450VAC Cables" value="'+(cf.desc||'')+'"></div>'
     +'</div>'
     +'<div class="g2">'
-      +'<div><label>NCM &nbsp;<a href="https://www.ncmweb.com.br" target="_blank" class="ncm-link">&#128279; Consultar F5 Comex</a></label>'
-        +'<input type="text" id="i_ncm-'+id+'" placeholder="Ex: 85322590" maxlength="10" value="'+(cf.ncm||'')+'" oninput="onNcmInput('+id+',this.value)">'
+      +'<div style="position:relative"><label>NCM &nbsp;<a href="https://www.ncmweb.com.br" target="_blank" class="ncm-link">&#128279; Consultar F5 Comex</a></label>'
+        +'<input type="text" id="i_ncm-'+id+'" placeholder="Ex: 85322590" maxlength="10" value="'+(cf.ncm||'')+'" autocomplete="off" oninput="onNcmInput('+id+',this.value)" onblur="setTimeout(function(){fecharSugestoesNCM('+id+')},150)">'
+        +'<div id="ncm-suggest-'+id+'" style="display:none;position:absolute;left:0;right:0;top:100%;z-index:20;background:#fff;border:1px solid #cfd7e3;border-radius:5px;box-shadow:0 4px 10px rgba(0,0,0,.08);max-height:220px;overflow-y:auto"></div>'
         +'<div id="ncm-status-'+id+'" style="display:none;font-size:10px;margin-top:3px;padding:3px 7px;border-radius:4px;font-weight:500"></div>'
         +'<button id="ncm-fill-btn-'+id+'" onclick="preencherAliquotas('+id+')" style="display:none;font-size:10px;background:#dbeafe;color:#0d2d5e;border:none;border-radius:4px;padding:3px 9px;cursor:pointer;margin-top:3px;font-weight:600">&#10004; Preencher al&#237;quotas autom&#225;tico</button>'
       +'</div>'
@@ -744,13 +761,23 @@ function remExtra(eid){extraIds=extraIds.filter(function(x){return x!==eid;});va
 
 /* ── NCM LOOKUP ─────────────────────────────────────── */
 var _ncmCache = {};
+var _ncmPrefixCache = {};
+var _ncmSuggestTimers = {};
 async function onNcmInput(id, val) {
   var ncm = val.replace(/[^0-9]/g, '');
   var sEl = document.getElementById('ncm-status-' + id);
   var btn = document.getElementById('ncm-fill-btn-' + id);
   if (sEl) { sEl.style.display = 'none'; sEl.textContent = ''; }
   if (btn) { btn.style.display = 'none'; btn._d = null; }
-  if (ncm.length < 8) return;
+  if (ncm.length < 8) {
+    fecharSugestoesNCM(id);
+    if (ncm.length >= 4) {
+      clearTimeout(_ncmSuggestTimers[id]);
+      _ncmSuggestTimers[id] = setTimeout(function() { mostrarSugestoesNCM(id, ncm); }, 300);
+    }
+    return;
+  }
+  fecharSugestoesNCM(id);
   var n8 = ncm.substring(0, 8);
   if (_ncmCache[n8] !== undefined) { _showNCM(id, n8, _ncmCache[n8]); return; }
   if (sEl) { sEl.style.cssText = 'display:block;font-size:10px;margin-top:3px;padding:3px 7px;border-radius:4px;font-weight:500;background:#E6F1FB;color:#185FA5'; sEl.textContent = 'Consultando...'; }
@@ -762,6 +789,39 @@ async function onNcmInput(id, val) {
   } catch(e) {
     if (sEl) { sEl.style.cssText = 'display:block;font-size:10px;margin-top:3px;padding:3px 7px;border-radius:4px;font-weight:500;background:#FCEBEB;color:#791F1F'; sEl.textContent = 'Erro: ' + e.message; }
   }
+}
+async function mostrarSugestoesNCM(id, prefixo) {
+  var box = document.getElementById('ncm-suggest-' + id);
+  if (!box) return;
+  var lista;
+  if (_ncmPrefixCache[prefixo] !== undefined) {
+    lista = _ncmPrefixCache[prefixo];
+  } else {
+    try {
+      if (!window.__buscarNCMPrefixo) return;
+      lista = await window.__buscarNCMPrefixo(prefixo);
+      _ncmPrefixCache[prefixo] = lista;
+    } catch(e) { return; }
+  }
+  var inp = document.getElementById('i_ncm-' + id);
+  if (!inp || inp.value.replace(/[^0-9]/g, '') !== prefixo) return;
+  if (!lista || !lista.length) { box.style.display = 'none'; box.innerHTML = ''; return; }
+  box.innerHTML = lista.map(function(it) {
+    return '<div onmousedown="selecionarNCM(' + id + ',\'' + it.ncm + '\')" '
+      + 'style="padding:6px 9px;cursor:pointer;font-size:11px;border-bottom:1px solid #f0f2f5">'
+      + '<strong>' + it.ncm + '</strong> &mdash; ' + (it.descricao || '') + '</div>';
+  }).join('');
+  box.style.display = 'block';
+}
+function selecionarNCM(id, ncm) {
+  var inp = document.getElementById('i_ncm-' + id);
+  if (inp) inp.value = ncm;
+  fecharSugestoesNCM(id);
+  onNcmInput(id, ncm);
+}
+function fecharSugestoesNCM(id) {
+  var box = document.getElementById('ncm-suggest-' + id);
+  if (box) { box.style.display = 'none'; box.innerHTML = ''; }
 }
 function _showNCM(id, n8, dados) {
   var sEl = document.getElementById('ncm-status-' + id);
