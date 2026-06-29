@@ -207,7 +207,7 @@ textarea{resize:vertical;min-height:52px;font-size:11px}
   import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js";
   import { getAuth, onAuthStateChanged, signOut } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js";
   import {
-    getFirestore, collection, doc, setDoc, deleteDoc,
+    getFirestore, collection, doc, setDoc, deleteDoc, getDoc,
     getDocs, query, where, serverTimestamp
   } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
 
@@ -288,6 +288,14 @@ textarea{resize:vertical;min-height:52px;font-size:11px}
   window.__firestoreExcluirEstudo = async function(id){
     await deleteDoc(doc(db, ESTUDOS_COL, id));
   };
+
+  // Buscar NCM no Firestore
+  window.__buscarNCM = async function(ncm8) {
+    try {
+      const snap = await getDoc(doc(db, 'ncm_aliquotas', ncm8));
+      return snap.exists() ? snap.data() : null;
+    } catch(e) { console.warn('buscarNCM:', e); return null; }
+  };
 </script>
 
 
@@ -329,7 +337,14 @@ textarea{resize:vertical;min-height:52px;font-size:11px}
   <div class="sh"><div class="sd"></div><span>Frete e câmbio</span></div>
   <div class="g4">
     <div><label>Frete total (USD)</label><input id="f_frete" type="number" step="0.01" placeholder="0.00"></div>
-    <div><label>Taxa cambial (R$/USD)</label><input id="f_cambio" type="number" step="0.0001" placeholder="5.5576"></div>
+    <div>
+      <label>Taxa cambial (R$/USD)</label>
+      <div style="display:flex;gap:6px;align-items:flex-end">
+        <input id="f_cambio" type="number" step="0.0001" placeholder="5.5576" style="flex:1">
+        <button onclick="buscarPTAX()" id="btn-ptax" style="background:#0A5C8F;border:none;border-radius:5px;color:#fff;font-size:11px;font-weight:600;padding:6px 10px;cursor:pointer;height:30px;white-space:nowrap">&#128225; PTAX</button>
+      </div>
+      <div id="ptax-info" style="font-size:10px;color:#5a6a7e;margin-top:3px"></div>
+    </div>
     <div><label>Qtd. total (todas NCMs)</label><input id="f_qtd" type="number" step="1" value="1"></div>
     <div>
       <label>N&#186; de Adi&#231;&#245;es (Siscomex)</label>
@@ -679,7 +694,10 @@ function addItem(cf){
     +'</div>'
     +'<div class="g2">'
       +'<div><label>NCM &nbsp;<a href="https://www.ncmweb.com.br" target="_blank" class="ncm-link">&#128279; Consultar F5 Comex</a></label>'
-        +'<input type="text" id="i_ncm-'+id+'" placeholder="Ex: 85322590" maxlength="10" value="'+(cf.ncm||'')+'"></div>'
+        +'<input type="text" id="i_ncm-'+id+'" placeholder="Ex: 85322590" maxlength="10" value="'+(cf.ncm||'')+'" oninput="onNcmInput('+id+',this.value)">'
+        +'<div id="ncm-status-'+id+'" style="display:none;font-size:10px;margin-top:3px;padding:3px 7px;border-radius:4px;font-weight:500"></div>'
+        +'<button id="ncm-fill-btn-'+id+'" onclick="preencherAliquotas('+id+')" style="display:none;font-size:10px;background:#dbeafe;color:#0d2d5e;border:none;border-radius:4px;padding:3px 9px;cursor:pointer;margin-top:3px;font-weight:600">&#10004; Preencher al&#237;quotas autom&#225;tico</button>'
+      +'</div>'
       +'<div><label>Valor FOB (USD)</label><input type="number" id="i_fob-'+id+'" step="0.01" placeholder="0.00" value="'+(cf.fob||'')+'"></div>'
     +'</div>'
     +'<div class="g5">'
@@ -723,6 +741,109 @@ function addExtra(nom,val){
   document.getElementById('extras-wrap').appendChild(d);
 }
 function remExtra(eid){extraIds=extraIds.filter(function(x){return x!==eid;});var el=document.getElementById('ext-'+eid);if(el)el.remove();}
+
+/* ── NCM LOOKUP ─────────────────────────────────────── */
+var _ncmCache = {};
+async function onNcmInput(id, val) {
+  var ncm = val.replace(/[^0-9]/g, '');
+  var sEl = document.getElementById('ncm-status-' + id);
+  var btn = document.getElementById('ncm-fill-btn-' + id);
+  if (sEl) { sEl.style.display = 'none'; sEl.textContent = ''; }
+  if (btn) { btn.style.display = 'none'; btn._d = null; }
+  if (ncm.length < 8) return;
+  var n8 = ncm.substring(0, 8);
+  if (_ncmCache[n8] !== undefined) { _showNCM(id, n8, _ncmCache[n8]); return; }
+  if (sEl) { sEl.style.cssText = 'display:block;font-size:10px;margin-top:3px;padding:3px 7px;border-radius:4px;font-weight:500;background:#E6F1FB;color:#185FA5'; sEl.textContent = 'Consultando...'; }
+  try {
+    if (!window.__buscarNCM) throw new Error('Firebase nao pronto');
+    var dados = await window.__buscarNCM(n8);
+    _ncmCache[n8] = dados;
+    _showNCM(id, n8, dados);
+  } catch(e) {
+    if (sEl) { sEl.style.cssText = 'display:block;font-size:10px;margin-top:3px;padding:3px 7px;border-radius:4px;font-weight:500;background:#FCEBEB;color:#791F1F'; sEl.textContent = 'Erro: ' + e.message; }
+  }
+}
+function _showNCM(id, n8, dados) {
+  var sEl = document.getElementById('ncm-status-' + id);
+  var btn = document.getElementById('ncm-fill-btn-' + id);
+  if (!dados) {
+    if (sEl) { sEl.style.cssText = 'display:block;font-size:10px;margin-top:3px;padding:3px 7px;border-radius:4px;font-weight:500;background:#FCEBEB;color:#791F1F'; sEl.textContent = 'NCM ' + n8 + ' nao encontrado. Preencha manualmente.'; }
+    return;
+  }
+  if (sEl) {
+    sEl.style.cssText = 'display:block;font-size:10px;margin-top:3px;padding:3px 7px;border-radius:4px;font-weight:500;background:#E1F5EE;color:#0F6E56';
+    sEl.textContent = '✔ ' + (dados.descricao || n8) + ' | II: ' + dados.ii + '% · IPI: ' + dados.ipi + '% · PIS: ' + dados.pis + '% · COFINS: ' + dados.cofins + '%';
+  }
+  if (btn) { btn.style.display = 'inline-block'; btn._d = dados; }
+  preencherAliquotas(id);
+}
+function preencherAliquotas(id) {
+  var btn = document.getElementById('ncm-fill-btn-' + id);
+  if (!btn || !btn._d) return;
+  var d = btn._d;
+  var s = function(fid, v) { var el = document.getElementById(fid); if (el && v != null) el.value = v; };
+  s('i_ii-' + id, d.ii); s('i_ipi-' + id, d.ipi);
+  s('i_pis-' + id, d.pis); s('i_cof-' + id, d.cofins);
+  if (d.icms != null) s('i_icms-' + id, d.icms);
+  var dEl = document.getElementById('i_desc-' + id);
+  if (dEl && !dEl.value && d.descricao) dEl.value = d.descricao;
+  btn.textContent = '✔ Preenchido!';
+  setTimeout(function() { btn.textContent = '✔ Preencher alíquotas automático'; }, 2000);
+}
+
+/* ── PTAX ────────────────────────────────────────────── */
+async function buscarPTAX() {
+  var btn = document.getElementById('btn-ptax');
+  var info = document.getElementById('ptax-info');
+  var inp = document.getElementById('f_cambio');
+  if (!btn || !inp) return;
+  btn.disabled = true; btn.textContent = '...';
+  if (info) info.textContent = '';
+  var ptax = null, dataUsada = '';
+  try {
+    for (var i = 0; i <= 5; i++) {
+      var d = new Date(); d.setDate(d.getDate() - i);
+      if (d.getDay() === 0) d.setDate(d.getDate() - 1);
+      if (d.getDay() === 6) d.setDate(d.getDate() - 1);
+      var mm = String(d.getMonth() + 1).padStart(2, '0');
+      var dd = String(d.getDate()).padStart(2, '0');
+      var yyyy = d.getFullYear();
+      try {
+        var url = 'https://olinda.bcb.gov.br/olinda/servico/PTAX/versao/v1/odata/'
+          + 'CotacaoMoedaDia(moeda=@moeda,dataCotacao=@data)'
+          + '?@moeda=' + encodeURIComponent("'USD'")
+          + '&@data=' + encodeURIComponent("'" + mm + '-' + dd + '-' + yyyy + "'")
+          + '&$top=1&$orderby=dataHoraCotacao%20desc&$format=json&$select=cotacaoVenda,dataHoraCotacao';
+        var r = await fetch(url);
+        if (!r.ok) continue;
+        var j = await r.json();
+        if (j.value && j.value.length > 0) {
+          ptax = j.value[0].cotacaoVenda;
+          dataUsada = dd + '/' + mm + '/' + yyyy + ' ' + (j.value[0].dataHoraCotacao || '').substring(11, 16);
+          break;
+        }
+      } catch(e2) { continue; }
+    }
+    // Fallback AwesomeAPI
+    if (!ptax) {
+      try {
+        var r2 = await fetch('https://economia.awesomeapi.com.br/json/last/USD-BRL');
+        var j2 = await r2.json();
+        if (j2['USDBRL'] && j2['USDBRL'].ask) { ptax = parseFloat(j2['USDBRL'].ask); dataUsada = 'agora'; }
+      } catch(e3) {}
+    }
+    if (ptax) {
+      inp.value = parseFloat(ptax).toFixed(4);
+      if (info) { info.style.color = '#0F6E56'; info.innerHTML = '&#128225; PTAX venda em ' + dataUsada + ' &mdash; fonte: BCB'; }
+    } else {
+      if (info) { info.style.color = '#791F1F'; info.textContent = 'PTAX indisponível. Preencha manualmente.'; }
+    }
+  } catch(e) {
+    if (info) { info.style.color = '#791F1F'; info.textContent = 'Erro: ' + e.message; }
+  } finally {
+    btn.disabled = false; btn.innerHTML = '&#128225; PTAX';
+  }
+}
 
 function calcular(){
   if(!items.length){alert('Adicione pelo menos um item.');return;}
