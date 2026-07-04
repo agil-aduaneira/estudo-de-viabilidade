@@ -177,7 +177,7 @@ textarea{resize:vertical;min-height:52px;font-size:11px}
   .sc,.add-btns,.add-desp-btn,.desp-extra-row,.btn-calc,.btn-pdf,.btn-limpar,.btn-estudos,.save-toast{display:none!important}
   .resultado{display:block!important;margin:0!important}
   #pdf-header,#pdf-footer{display:block!important}
-  #sec-rateio-desp,#sec-resumo{display:none!important}
+  #sec-rateio-desp,#sec-resumo,#sec-rateio-item{display:none!important}
   /* Na impressao: ocultar blocos individuais por NCM e mostrar apenas o consolidado */
   #imp-wrap{display:none!important}
   #sec-ncm-total{display:none!important}
@@ -594,8 +594,10 @@ textarea{resize:vertical;min-height:52px;font-size:11px}
     <div class="rs"><div class="dot"></div><span>Identificação</span></div>
     <div class="res-card"><table class="rht" id="res-ident"></table></div>
 
-    <div class="rs"><div class="dot"></div><span>Rateio por item</span></div>
-    <div class="rateio-wrap"><table class="rtable" id="rtable"></table></div>
+    <div id="sec-rateio-item">
+      <div class="rs"><div class="dot"></div><span>Rateio por item</span></div>
+      <div class="rateio-wrap"><table class="rtable" id="rtable"></table></div>
+    </div>
 
     <div class="rs"><div class="dot"></div><span>1 – Impostos federais e estaduais por item</span></div>
     <div id="imp-wrap"></div>
@@ -1001,7 +1003,7 @@ function calcular(){
   });
   var totalDesp=d_frete+d_taxas+d_port+d_rod+d_hon+d_out+totalExtras;
   var grandTotal=totalImpAll+totalDesp;
-  var unitarioGeral=grandTotal/(qtdTotal||1);
+  var unitarioGeral=(totalFOB_BRL+grandTotal)/(qtdTotal||1);
   document.getElementById('d_frete').value=freteBRL.toFixed(2);
 
   var despList=[
@@ -1132,7 +1134,7 @@ function calcular(){
     var despItemVals=despCols.map(function(d){
       var v=totalCIF_BRL>0?(x.cifBRL/totalCIF_BRL)*d.val:0;despItem+=v;return v;
     });
-    var custoTotal=x.totalImp+despItem;
+    var custoTotal=x.fobBRL+x.totalImp+despItem;
     var custoUnit=x.qtdItem>0?custoTotal/x.qtdItem:0;
     totRD.vmle+=x.fobBRL;totRD.fp+=x.fpBRL;totRD.cif+=x.cifBRL;
     totRD.ii+=x.ii;totRD.ipi+=x.ipi;totRD.pis+=x.pis;totRD.cofins+=x.cofins;
@@ -1182,17 +1184,17 @@ function calcular(){
   if(ncmOrder.length>1){
     ncmOrder.forEach(function(ncm){
       var itensNCM=itemData.filter(function(x){return x.ncm===ncm;});
-      var qtdNCM=0,impNCM=0,despNCM=0;
+      var qtdNCM=0,vmleNCM=0,impNCM=0,despNCM=0;
       itensNCM.forEach(function(x){
-        qtdNCM+=x.qtdItem;impNCM+=x.totalImp;
+        qtdNCM+=x.qtdItem;vmleNCM+=x.fobBRL;impNCM+=x.totalImp;
         despCols.forEach(function(d){despNCM+=totalCIF_BRL>0?(x.cifBRL/totalCIF_BRL)*d.val:0;});
       });
-      var custoNCM=impNCM+despNCM;
+      var custoNCM=vmleNCM+impNCM+despNCM;
       if(qtdNCM>0){
         algumCustoNCM=true;
         ucHtml+='<div class="unit-card" style="margin-bottom:8px">'
           +'<div><div class="uc-lbl">Custo unit&#225;rio &#8212; NCM '+ncm+' ('+ncmMap[ncm].desc+')</div>'
-          +'<div class="uc-qty">Impostos + despesas rateadas &divide; '+qtdNCM.toLocaleString('pt-BR')+' pe&ccedil;as</div></div>'
+          +'<div class="uc-qty">Valor do produto + impostos + despesas rateadas &divide; '+qtdNCM.toLocaleString('pt-BR')+' pe&ccedil;as</div></div>'
           +'<div class="uc-val">'+fR(custoNCM/qtdNCM)+'</div>'
           +'</div>';
       }
@@ -1204,8 +1206,8 @@ function calcular(){
   if(!algumCustoNCM){
     ucHtml+='<div class="unit-card">'
       +'<div><div class="uc-lbl">Custo unit&#225;rio de importa&ccedil;&atilde;o</div>'
-      +'<div class="uc-qty">Total (impostos + despesas) &divide; '+qtdParaGeral.toLocaleString('pt-BR')+' unidade(s)</div></div>'
-      +'<div class="uc-val">'+fR(grandTotal/qtdParaGeral)+'</div>'
+      +'<div class="uc-qty">Valor do produto + impostos + despesas &divide; '+qtdParaGeral.toLocaleString('pt-BR')+' unidade(s)</div></div>'
+      +'<div class="uc-val">'+fR((totalFOB_BRL+grandTotal)/qtdParaGeral)+'</div>'
       +'</div>';
   }
   document.getElementById('unit-cards-wrap').innerHTML=ucHtml;
@@ -1239,6 +1241,7 @@ function confirmarPDF(){
   // Preparar: ocultar seções que não vão no PDF, mostrar header/footer de impressão
   document.getElementById('sec-rateio-desp').style.display='none';
   document.getElementById('sec-resumo').style.display='none';
+  document.getElementById('sec-rateio-item').style.display='none';
   document.getElementById('pdf-header').style.display='block';
   document.getElementById('pdf-footer').style.display='block';
   // Clonar grand-total, unit-cards e obs-box para aparecerem no PDF
@@ -1262,6 +1265,7 @@ function confirmarPDF(){
       document.getElementById('pdf-footer').style.display='none';
       document.getElementById('sec-rateio-desp').style.display='';
       document.getElementById('sec-resumo').style.display='';
+      document.getElementById('sec-rateio-item').style.display='';
     },500);
   },200);
 }
@@ -1299,7 +1303,7 @@ function confirmarXLSX(){
       var despItemVals=c.despCols.map(function(d){
         var v=c.totalCIF_BRL>0?(x.cifBRL/c.totalCIF_BRL)*d.val:0;despItem+=v;return v;
       });
-      var custoTotal=x.totalImp+despItem;
+      var custoTotal=x.fobBRL+x.totalImp+despItem;
       var custoUnit=x.qtdItem>0?custoTotal/x.qtdItem:null;
       var row=[idx+1,x.ncm,x.desc,x.qtdItem||null,pct/100,x.fobUSD,
         x.fobBRL,x.fpBRL,x.cifBRL,x.ii,x.ipi,x.pis,x.cofins,x.sisItem,x.afrmmItem];
