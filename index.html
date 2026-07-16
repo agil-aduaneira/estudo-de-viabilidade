@@ -178,8 +178,7 @@ textarea{resize:vertical;min-height:52px;font-size:11px}
   .resultado{display:block!important;margin:0!important}
   #pdf-header,#pdf-footer{display:block!important}
   #sec-rateio-desp,#sec-resumo,#sec-rateio-item{display:none!important}
-  /* Na impressao: ocultar blocos individuais por NCM e mostrar apenas o consolidado */
-  #imp-wrap{display:none!important}
+  /* Na impressao: mostrar o detalhamento por item (com aliquotas) e o subtotal geral abaixo */
   #sec-ncm-total{display:none!important}
   #imp-wrap-print{display:block!important}
   .tax-block{page-break-inside:avoid;break-inside:avoid}
@@ -1067,7 +1066,7 @@ function calcular(){
   });
   document.getElementById('imp-wrap').innerHTML=impHtml;
 
-  // BLOCO CONSOLIDADO PARA IMPRESSAO (soma de todos os itens em um unico bloco)
+  // BLOCO DE TOTAL GERAL PARA IMPRESSAO (soma de todos os itens; aliquotas ficam nos blocos por item acima, #imp-wrap)
   (function(){
     var totII=0,totIPI=0,totPIS=0,totCOF=0,totSIS=0,totAFR=0,totICMS=0,totIMP=0;
     var totCIF=0;
@@ -1076,7 +1075,7 @@ function calcular(){
       totSIS+=x.sisItem;totAFR+=x.afrmmItem;totICMS+=x.icms;totIMP+=x.totalImp;
       totCIF+=x.cifBRL;
     });
-    var printHtml='<div class="tax-block">'      +'<div class="tax-title">Valor Aduaneiro Total: '+fR(totCIF)+'</div>'      +'<div class="tax-body">'        +'<div class="trow"><span class="lbl">Imposto de Importa&ccedil;&atilde;o</span><span class="val">'+fR(totII)+'</span></div>'        +'<div class="trow"><span class="lbl">I.P.I.</span><span class="val">'+fR(totIPI)+'</span></div>'        +'<div class="trow"><span class="lbl">PIS</span><span class="val">'+fR(totPIS)+'</span></div>'        +'<div class="trow"><span class="lbl">COFINS</span><span class="val">'+fR(totCOF)+'</span></div>'        +'<div class="trow"><span class="lbl">Taxa Siscomex</span><span class="val">'+fR(totSIS)+'</span></div>'        +'<div class="trow"><span class="lbl">AFRMM<span class="aliq">'+(modal==='aereo'?'N&atilde;o aplic&aacute;vel (modal a&eacute;reo)':'Frete&times;C&acirc;mbio&times;8%+R$20 rateado')+'</span></span><span class="val">'+fR(totAFR)+'</span></div>'        +'<div class="trow"><span class="lbl">ICMS</span><span class="val">'+fR(totICMS)+'</span></div>'        +'<div class="tsub"><span>Subtotal impostos</span><span>'+fR(totIMP)+'</span></div>'      +'</div></div>';
+    var printHtml='<div class="tax-block">'      +'<div class="tax-title">TOTAL GERAL DE IMPOSTOS &mdash; Valor Aduaneiro Total: '+fR(totCIF)+'</div>'      +'<div class="tax-body">'        +'<div class="trow"><span class="lbl">Imposto de Importa&ccedil;&atilde;o</span><span class="val">'+fR(totII)+'</span></div>'        +'<div class="trow"><span class="lbl">I.P.I.</span><span class="val">'+fR(totIPI)+'</span></div>'        +'<div class="trow"><span class="lbl">PIS</span><span class="val">'+fR(totPIS)+'</span></div>'        +'<div class="trow"><span class="lbl">COFINS</span><span class="val">'+fR(totCOF)+'</span></div>'        +'<div class="trow"><span class="lbl">Taxa Siscomex</span><span class="val">'+fR(totSIS)+'</span></div>'        +'<div class="trow"><span class="lbl">AFRMM<span class="aliq">'+(modal==='aereo'?'N&atilde;o aplic&aacute;vel (modal a&eacute;reo)':'Frete&times;C&acirc;mbio&times;8%+R$20 rateado')+'</span></span><span class="val">'+fR(totAFR)+'</span></div>'        +'<div class="trow"><span class="lbl">ICMS</span><span class="val">'+fR(totICMS)+'</span></div>'        +'<div class="tsub"><span>Subtotal impostos</span><span>'+fR(totIMP)+'</span></div>'      +'</div></div>';
     document.getElementById('imp-wrap-print').innerHTML=printHtml;
   })();
 
