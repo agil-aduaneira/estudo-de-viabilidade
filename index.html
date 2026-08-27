@@ -978,7 +978,7 @@ function calcular(){
     var icms=0;
     if(icmsTP==='reducao'&&redPct>0){
       var divisor=(100-redPct)/100;
-      icms=((cifBRL+ii+ipi+pis+cofins+afrmmItem+sisItem)/divisor)*icmsA;
+      icms=((cifBRL+ii+ipi+pis+cofins+afrmmItem+sisItem)/divisor)*(redPct/100);
     }else{
       icms=((cifBRL+ii+ipi+pis+cofins+afrmmItem+sisItem)/(1-icmsA))*icmsA;
     }
