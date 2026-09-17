@@ -62,17 +62,21 @@ textarea{resize:vertical;min-height:52px;font-size:11px}
 .btn-xlsx:hover{background:#e8f5ee}
 .btn-limpar{background:#fff;border:1px solid #cfd7e3;border-radius:7px;color:#8a96a3;padding:13px 14px;font-size:13px;cursor:pointer}
 .btn-limpar:hover{background:#f7f9fc}
-.btn-estudos{background:#fff;border:1px solid #8a5cf6;border-radius:7px;color:#6d28d9;padding:13px 16px;font-size:13px;cursor:pointer;font-weight:500}
-.btn-estudos:hover{background:#f3effe}
+.btn-salvar-estudo{background:#1d6f42;border:none;border-radius:7px;color:#fff;padding:13px 16px;font-size:13px;cursor:pointer;font-weight:600}
+.btn-salvar-estudo:hover{opacity:.9}
+.btn-ver-estudos{background:#eaf6ff;border:1px solid #3a9bd5;border-radius:7px;color:#0d6ab0;padding:13px 16px;font-size:13px;cursor:pointer;font-weight:500}
+.btn-ver-estudos:hover{background:#dbeefe}
 /* MODAL ESTUDOS SALVOS */
 .modal-box-lg{background:#fff;border-radius:10px;padding:22px 24px;max-width:560px;width:92%;max-height:82vh;display:flex;flex-direction:column}
 .modal-box-lg h3{font-size:16px;color:#0d2d5e;margin-bottom:4px;font-weight:700;flex-shrink:0}
 .modal-box-lg p.sub{font-size:11px;color:#8a96a3;margin-bottom:14px;flex-shrink:0}
-.estudos-actions{display:flex;gap:8px;margin-bottom:12px;flex-shrink:0}
+.estudos-actions{display:flex;gap:8px;margin-bottom:12px;flex-shrink:0;border-radius:8px;transition:box-shadow .15s}
 .estudos-actions input{flex:1}
+.estudos-actions-focus{box-shadow:0 0 0 3px rgba(58,155,213,.3)}
 .btn-salvar-novo{background:#0d2d5e;color:#fff;border:none;border-radius:6px;padding:9px 16px;font-size:12px;font-weight:600;cursor:pointer;white-space:nowrap}
 .btn-salvar-novo:hover{background:#1a4a8a}
-.estudos-list{overflow-y:auto;flex:1;min-height:80px;border-top:1px solid #edf0f5}
+.estudos-list{overflow-y:auto;flex:1;min-height:80px;border-top:1px solid #edf0f5;border-radius:4px;transition:box-shadow .15s}
+.estudos-list-focus{box-shadow:0 0 0 3px rgba(58,155,213,.3)}
 .estudo-row{display:flex;align-items:center;gap:10px;padding:10px 4px;border-bottom:1px solid #edf0f5}
 .estudo-info{flex:1;min-width:0}
 .estudo-nome{font-size:12px;font-weight:600;color:#1a2332;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
@@ -175,7 +179,7 @@ textarea{resize:vertical;min-height:52px;font-size:11px}
   body{background:#fff!important}
   .page{padding:0!important;max-width:100%!important;margin:0!important}
   .agil-header,.agil-footer,.form-body,.action-bar,.modal-bg,
-  .sc,.add-btns,.add-desp-btn,.desp-extra-row,.btn-calc,.btn-pdf,.btn-limpar,.btn-estudos,.save-toast{display:none!important}
+  .sc,.add-btns,.add-desp-btn,.desp-extra-row,.btn-calc,.btn-pdf,.btn-limpar,.btn-salvar-estudo,.btn-ver-estudos,.save-toast{display:none!important}
   .resultado{display:block!important;margin:0!important}
   #pdf-header,#pdf-footer{display:block!important}
   #sec-rateio-desp,#sec-resumo,#sec-rateio-item{display:none!important}
@@ -580,7 +584,8 @@ textarea{resize:vertical;min-height:52px;font-size:11px}
 <div class="action-bar">
   <button class="btn-calc" onclick="calcular()">&#9654; Calcular Estudo de Viabilidade</button>
   <button class="btn-pdf" onclick="abrirModal()">&#8595; Exportar PDF / XLSX</button>
-  <button class="btn-estudos" onclick="abrirModalEstudos()">&#128190; Estudos Salvos</button>
+  <button class="btn-salvar-estudo" onclick="abrirModalEstudos('salvar')">&#128190; Salvar Estudo</button>
+  <button class="btn-ver-estudos" onclick="abrirModalEstudos('ver')">&#128193; Ver Estudos Salvos</button>
   <button class="btn-limpar" onclick="limpar()" title="Limpar">&#10005;</button>
 </div>
 
@@ -661,11 +666,11 @@ textarea{resize:vertical;min-height:52px;font-size:11px}
     <div class="estudos-actions" id="estudo-update-row" style="display:none">
       <button class="btn-salvar-novo" style="background:#1d6f42;flex:1" onclick="atualizarEstudoExistente(estudoAtualId)">&#128190; Atualizar estudo aberto</button>
     </div>
-    <div class="estudos-actions">
+    <div class="estudos-actions" id="estudo-save-row">
       <input type="text" id="estudo-nome-novo" placeholder="Nome do estudo (ex: SMILER - SML-20260326)">
       <button class="btn-salvar-novo" onclick="salvarEstudoAtual()">&#128190; Salvar como novo</button>
     </div>
-    <div class="estudos-list" id="estudos-list"></div>
+    <div class="estudos-list" id="estudos-list" tabindex="-1"></div>
     <div class="modal-btns-close">
       <button class="mbtn mbtn-cancel" onclick="fecharModalEstudos()">Fechar</button>
     </div>
@@ -1423,7 +1428,8 @@ function restaurarEstadoForm(st){
   window.scrollTo({top:0,behavior:'smooth'});
 }
 
-async function abrirModalEstudos(){
+async function abrirModalEstudos(foco){
+  foco=foco||'ver';
   document.getElementById('estudo-nome-novo').value='';
   var wrap=document.getElementById('estudos-list');
   wrap.innerHTML='<div class="estudos-empty">Carregando estudos…</div>';
@@ -1450,8 +1456,42 @@ async function abrirModalEstudos(){
     updRow.style.display='none';
   }
   renderListaEstudos();
+  aplicarFocoModalEstudos(foco);
 }
-function fecharModalEstudos(){document.getElementById('modal-estudos').classList.remove('show');}
+
+// Destaca/foca a area relevante do modal (salvar ou consultar) sem duplicar o modal em si
+function aplicarFocoModalEstudos(foco){
+  var updRow=document.getElementById('estudo-update-row');
+  var saveRow=document.getElementById('estudo-save-row');
+  var listWrap=document.getElementById('estudos-list');
+  updRow.classList.remove('estudos-actions-focus');
+  saveRow.classList.remove('estudos-actions-focus');
+  listWrap.classList.remove('estudos-list-focus');
+  setTimeout(function(){
+    if(foco==='salvar'){
+      if(updRow.style.display!=='none'){
+        updRow.classList.add('estudos-actions-focus');
+        updRow.scrollIntoView({block:'nearest'});
+        updRow.querySelector('button').focus();
+      }else{
+        saveRow.classList.add('estudos-actions-focus');
+        saveRow.scrollIntoView({block:'nearest'});
+        document.getElementById('estudo-nome-novo').focus();
+      }
+    }else{
+      listWrap.classList.add('estudos-list-focus');
+      listWrap.scrollIntoView({block:'nearest'});
+      listWrap.focus();
+    }
+  },50);
+}
+
+function fecharModalEstudos(){
+  document.getElementById('modal-estudos').classList.remove('show');
+  document.getElementById('estudo-update-row').classList.remove('estudos-actions-focus');
+  document.getElementById('estudo-save-row').classList.remove('estudos-actions-focus');
+  document.getElementById('estudos-list').classList.remove('estudos-list-focus');
+}
 
 function escHtml(s){
   return String(s==null?'':s).replace(/[&<>"']/g,function(c){
