@@ -1370,10 +1370,10 @@ function showToast(msg,sucesso){
   t._tm=setTimeout(function(){t.classList.remove('show');},2600);
 }
 
-// Copia texto para a área de transferência, com fallback para navegadores/contextos sem Clipboard API
-function copiarTexto(texto,mensagemSucesso){
+// Copia texto (com versão HTML em negrito, quando suportado) para a área de transferência, com fallback para Clipboard API indisponível
+function copiarTexto(texto,html,mensagemSucesso){
   function ok(){showToast(mensagemSucesso,true);}
-  function fallback(){
+  function fallbackPlain(){
     var ta=document.createElement('textarea');
     ta.value=texto;
     ta.style.position='fixed';ta.style.opacity='0';
@@ -1383,10 +1383,21 @@ function copiarTexto(texto,mensagemSucesso){
     catch(e){alert('Não foi possível copiar automaticamente. Selecione e copie o texto manualmente.');}
     document.body.removeChild(ta);
   }
-  if(navigator.clipboard&&navigator.clipboard.writeText){
-    navigator.clipboard.writeText(texto).then(ok).catch(fallback);
+  function soTexto(){
+    if(navigator.clipboard&&navigator.clipboard.writeText){
+      navigator.clipboard.writeText(texto).then(ok).catch(fallbackPlain);
+    }else{
+      fallbackPlain();
+    }
+  }
+  if(html&&window.ClipboardItem&&navigator.clipboard&&navigator.clipboard.write){
+    var item=new ClipboardItem({
+      'text/plain':new Blob([texto],{type:'text/plain'}),
+      'text/html':new Blob([html],{type:'text/html'})
+    });
+    navigator.clipboard.write([item]).then(ok).catch(soTexto);
   }else{
-    fallback();
+    soTexto();
   }
 }
 
@@ -1399,28 +1410,52 @@ function gerarEmailCliente(){
   var invoice=c.inv||'S/N';
   var importador=c.imp||'(importador não informado)';
   var exportador=c.exp||'(exportador não informado)';
+  var vFob=fN(c.totalFOB_USD),vFrete=fN(c.freteUSD),vCambio=c.cambio.toFixed(4),
+    vAduaneiro=fN(c.totalCIF_BRL),vImpostos=fN(c.totalImpAll),vDespesas=fN(c.totalDesp),
+    vCusto=fN(custoUnit),vQtd=qtd.toLocaleString('pt-BR');
 
   var texto='Assunto: Estudo de Viabilidade — Importação '+produto+' (Invoice '+invoice+')\n\n'
     +'Prezado(a) '+importador+',\n\n'
     +'Segue em anexo o Estudo de Viabilidade referente à importação de '+produto+', fornecedor '+exportador+' (Invoice '+invoice+').\n\n'
     +'Resumo dos principais valores considerados:\n\n'
-    +'- Valor do produto (FOB): US$ '+fN(c.totalFOB_USD)+'\n'
-    +'- Frete internacional: US$ '+fN(c.freteUSD)+'\n'
-    +'- Taxa de câmbio utilizada: R$ '+c.cambio.toFixed(4)+'\n'
-    +'- Valor aduaneiro: R$ '+fN(c.totalCIF_BRL)+'\n'
-    +'- Total de impostos federais e estaduais (II, IPI, PIS, COFINS, Taxa Siscomex, AFRMM, ICMS): R$ '+fN(c.totalImpAll)+'\n'
-    +'- Despesas gerais: R$ '+fN(c.totalDesp)+'\n'
-    +'- Custo unitário de importação: R$ '+fN(custoUnit)+' por unidade (considerando '+qtd.toLocaleString('pt-BR')+' unidade(s))\n\n'
+    +'- Valor do produto (FOB): US$ '+vFob+'\n'
+    +'- Frete internacional: US$ '+vFrete+'\n'
+    +'- Taxa de câmbio utilizada: R$ '+vCambio+'\n'
+    +'- Valor aduaneiro: R$ '+vAduaneiro+'\n'
+    +'- Total de impostos federais e estaduais (II, IPI, PIS, COFINS, Taxa Siscomex, AFRMM, ICMS): R$ '+vImpostos+'\n'
+    +'- Despesas gerais: R$ '+vDespesas+'\n'
+    +'- Custo unitário de importação: R$ '+vCusto+' por unidade (considerando '+vQtd+' unidade(s))\n\n'
     +'O custo unitário é calculado somando o valor do produto, os impostos e as despesas, e dividindo pela quantidade total importada.\n\n'
     +'O estudo completo, com o detalhamento por item e por tributo, está anexo em PDF para sua análise.\n\n'
-    +'Fico à disposição para esclarecer qualquer ponto ou ajustar simulações com outros cenários de câmbio, frete ou quantidade.\n\n'
+    +'Fico à disposição para esclarecer qualquer ponto ou ajustar simulações com outros cenários de câmbio, frete ou quantidade se necessário.\n\n'
     +'Atenciosamente,\n'
     +'Wellington Santos\n'
     +'Coordenador de Comércio Exterior\n'
     +'Ágil Soluções Aduaneiras Ltda.\n'
     +'(85) 3046-3003 | comercial@agiladuaneira.com.br';
 
-  copiarTexto(texto,'✅ E-mail copiado!');
+  var b=function(s){return'<b>'+escHtml(s)+'</b>';};
+  var html='Assunto: Estudo de Viabilidade — Importação '+b(produto)+' (Invoice '+b(invoice)+')<br><br>'
+    +'Prezado(a) '+b(importador)+',<br><br>'
+    +'Segue em anexo o Estudo de Viabilidade referente à importação de '+b(produto)+', fornecedor '+b(exportador)+' (Invoice '+b(invoice)+').<br><br>'
+    +'Resumo dos principais valores considerados:<br><br>'
+    +'- Valor do produto (FOB): US$ '+b(vFob)+'<br>'
+    +'- Frete internacional: US$ '+b(vFrete)+'<br>'
+    +'- Taxa de câmbio utilizada: R$ '+b(vCambio)+'<br>'
+    +'- Valor aduaneiro: R$ '+b(vAduaneiro)+'<br>'
+    +'- Total de impostos federais e estaduais (II, IPI, PIS, COFINS, Taxa Siscomex, AFRMM, ICMS): R$ '+b(vImpostos)+'<br>'
+    +'- Despesas gerais: R$ '+b(vDespesas)+'<br>'
+    +'- Custo unitário de importação: R$ '+b(vCusto)+' por unidade (considerando '+b(vQtd)+' unidade(s))<br><br>'
+    +'O custo unitário é calculado somando o valor do produto, os impostos e as despesas, e dividindo pela quantidade total importada.<br><br>'
+    +'O estudo completo, com o detalhamento por item e por tributo, está anexo em PDF para sua análise.<br><br>'
+    +'Fico à disposição para esclarecer qualquer ponto ou ajustar simulações com outros cenários de câmbio, frete ou quantidade se necessário.<br><br>'
+    +'Atenciosamente,<br>'
+    +'Wellington Santos<br>'
+    +'Coordenador de Comércio Exterior<br>'
+    +'Ágil Soluções Aduaneiras Ltda.<br>'
+    +'(85) 3046-3003 | comercial@agiladuaneira.com.br';
+
+  copiarTexto(texto,html,'✅ E-mail copiado!');
 }
 
 // Captura o estado atual de TODO o formulário (dados gerais, frete/câmbio,
