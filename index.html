@@ -149,6 +149,7 @@ textarea{resize:vertical;min-height:52px;font-size:11px}
 .gt-lbl{color:#93c5e8;font-size:12px;margin-bottom:5px}
 .gt-val{color:#fff;font-size:30px;font-weight:700}
 .gt-sub{color:#93c5e8;font-size:11px;margin-top:5px}
+.gt-note{color:#c9dcf0;font-size:9.5px;margin-top:5px;padding-top:5px;border-top:1px solid rgba(255,255,255,.15)}
 .unit-card{background:#f7f9fc;border:1px solid #e0e6ee;border-radius:7px;padding:11px 16px;display:flex;justify-content:space-between;align-items:center;margin-bottom:10px}
 .uc-lbl{font-size:12px;color:#5a6a7e;font-weight:500}
 .uc-qty{font-size:10px;color:#aab3bd;margin-top:2px}
@@ -1174,7 +1175,8 @@ function calcular(){
   document.getElementById('grand-total').innerHTML=
     '<div class="gt-lbl">TOTAL DE IMPOSTOS (FEDERAIS + ESTADUAIS) + DESPESAS</div>'
     +'<div class="gt-val">'+fR(grandTotal)+'</div>'
-    +'<div class="gt-sub">DATA: '+hoje+' &nbsp;&middot;&nbsp; C&acirc;mbio: R$ '+cambio.toFixed(4)+' &nbsp;&middot;&nbsp; Siscomex ('+adicoes+' adi&ccedil;&otilde;es): '+fR(sisTotal)+' &nbsp;&middot;&nbsp; AFRMM: '+fR(afrmmTotal)+'</div>';
+    +'<div class="gt-sub">DATA: '+hoje+' &nbsp;&middot;&nbsp; C&acirc;mbio: R$ '+cambio.toFixed(4)+' &nbsp;&middot;&nbsp; Siscomex ('+adicoes+' adi&ccedil;&otilde;es): '+fR(sisTotal)+' &nbsp;&middot;&nbsp; AFRMM: '+fR(afrmmTotal)+'</div>'
+    +'<div class="gt-note">&#9888; Este total n&atilde;o inclui o valor do produto (VMLE) &mdash; &eacute; apenas a soma de impostos + despesas.</div>';
 
   // CUSTO UNITÁRIO POR NCM + GERAL
   // Custo por NCM: só exibe se o NCM tiver qtdItem preenchida
@@ -1205,7 +1207,7 @@ function calcular(){
   if(!algumCustoNCM){
     ucHtml+='<div class="unit-card">'
       +'<div><div class="uc-lbl">Custo unit&#225;rio de importa&ccedil;&atilde;o</div>'
-      +'<div class="uc-qty">Valor do produto + impostos + despesas &divide; '+qtdParaGeral.toLocaleString('pt-BR')+' unidade(s)</div></div>'
+      +'<div class="uc-qty">('+fR(totalFOB_BRL)+' produto + '+fR(totalImpAll)+' impostos + '+fR(totalDesp)+' despesas) &divide; '+qtdParaGeral.toLocaleString('pt-BR')+' unidade(s)</div></div>'
       +'<div class="uc-val">'+fR((totalFOB_BRL+grandTotal)/qtdParaGeral)+'</div>'
       +'</div>';
   }
