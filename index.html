@@ -66,6 +66,9 @@ textarea{resize:vertical;min-height:52px;font-size:11px}
 .btn-salvar-estudo:hover{opacity:.9}
 .btn-ver-estudos{background:#eaf6ff;border:1px solid #3a9bd5;border-radius:7px;color:#0d6ab0;padding:13px 16px;font-size:13px;cursor:pointer;font-weight:500}
 .btn-ver-estudos:hover{background:#dbeefe}
+.btn-email-cliente{position:relative;background:#fef6e7;border:1px solid #d97706;border-radius:7px;color:#92400e;padding:13px 16px;font-size:13px;cursor:pointer;font-weight:500}
+.btn-email-cliente:hover{background:#fdecc8}
+.btn-email-cliente .badge-novo{position:absolute;top:-9px;right:-8px;background:#e53e3e;color:#fff;font-size:9px;font-weight:700;padding:2px 7px;border-radius:10px;letter-spacing:.03em;box-shadow:0 1px 3px rgba(0,0,0,.2)}
 /* MODAL ESTUDOS SALVOS */
 .modal-box-lg{background:#fff;border-radius:10px;padding:22px 24px;max-width:560px;width:92%;max-height:82vh;display:flex;flex-direction:column}
 .modal-box-lg h3{font-size:16px;color:#0d2d5e;margin-bottom:4px;font-weight:700;flex-shrink:0}
@@ -91,6 +94,7 @@ textarea{resize:vertical;min-height:52px;font-size:11px}
 .modal-btns-close{display:flex;justify-content:flex-end;margin-top:14px;flex-shrink:0}
 .save-toast{position:fixed;bottom:20px;left:50%;transform:translateX(-50%);background:#0d2d5e;color:#fff;padding:10px 20px;border-radius:7px;font-size:12px;font-weight:600;z-index:10001;display:none;box-shadow:0 4px 14px rgba(0,0,0,.2)}
 .save-toast.show{display:block}
+.save-toast.toast-success{background:#1d6f42}
 /* RESULTADO */
 .resultado{display:none;margin-top:18px}
 .resultado.show{display:block}
@@ -179,7 +183,7 @@ textarea{resize:vertical;min-height:52px;font-size:11px}
   body{background:#fff!important}
   .page{padding:0!important;max-width:100%!important;margin:0!important}
   .agil-header,.agil-footer,.form-body,.action-bar,.modal-bg,
-  .sc,.add-btns,.add-desp-btn,.desp-extra-row,.btn-calc,.btn-pdf,.btn-limpar,.btn-salvar-estudo,.btn-ver-estudos,.save-toast{display:none!important}
+  .sc,.add-btns,.add-desp-btn,.desp-extra-row,.btn-calc,.btn-pdf,.btn-limpar,.btn-salvar-estudo,.btn-ver-estudos,.btn-email-cliente,.save-toast{display:none!important}
   .resultado{display:block!important;margin:0!important}
   #pdf-header,#pdf-footer{display:block!important}
   #sec-rateio-desp,#sec-resumo,#sec-rateio-item{display:none!important}
@@ -586,6 +590,7 @@ textarea{resize:vertical;min-height:52px;font-size:11px}
   <button class="btn-pdf" onclick="abrirModal()">&#8595; Exportar PDF / XLSX</button>
   <button class="btn-salvar-estudo" onclick="abrirModalEstudos('salvar')">&#128190; Salvar Estudo</button>
   <button class="btn-ver-estudos" onclick="abrirModalEstudos('ver')">&#128193; Ver Estudos Salvos</button>
+  <button class="btn-email-cliente" onclick="gerarEmailCliente()">&#9993;&#65039; Gerar E-mail para Cliente<span class="badge-novo">NOVO</span></button>
   <button class="btn-limpar" onclick="limpar()" title="Limpar">&#10005;</button>
 </div>
 
@@ -698,6 +703,7 @@ function atualizarModal(){
 function fR(v){if(!v&&v!==0)return'R$ -';return'R$ '+parseFloat(v).toLocaleString('pt-BR',{minimumFractionDigits:2,maximumFractionDigits:2});}
 function fU(v){if(!v&&v!==0)return'$ -';return'$ '+parseFloat(v).toLocaleString('pt-BR',{minimumFractionDigits:2,maximumFractionDigits:2});}
 function fp(v){return(parseFloat(v)*100).toFixed(2)+'%';}
+function fN(v){if(!v&&v!==0)return'-';return parseFloat(v).toLocaleString('pt-BR',{minimumFractionDigits:2,maximumFractionDigits:2});}
 function fPct(v){return parseFloat(v).toLocaleString('pt-BR',{minimumFractionDigits:2,maximumFractionDigits:2})+'%';}
 function gv(id){return parseFloat(document.getElementById(id)&&document.getElementById(id).value)||0;}
 function gs(id){return document.getElementById(id)&&document.getElementById(id).value?document.getElementById(id).value.trim():'';}
@@ -1227,7 +1233,7 @@ function calcular(){
     totalImpAll:totalImpAll,totalFOB_BRL:totalFOB_BRL,totalCIF_BRL:totalCIF_BRL,
     totalFOB_USD:totalFOB_USD,freteUSD:freteUSD,freteBRL:freteBRL,
     cambio:cambio,sisTotal:sisTotal,adicoes:adicoes,afrmmTotal:afrmmTotal,modal:modal,
-    qtdTotal:qtdTotal,hoje:hoje,
+    qtdTotal:qtdTotal,qtdParaGeral:qtdParaGeral,hoje:hoje,
     imp:gs('f_imp'),exp:gs('f_exp'),prod:gs('f_prod'),inv:gs('f_inv'),
     porig:gs('f_porig'),pdest:gs('f_pdest')};
 
@@ -1355,11 +1361,66 @@ function confirmarXLSX(){
 var estudoAtualId=null;
 var estudosCache=[]; // cache em memória da última listagem, usado para renderizar a UI
 
-function showToast(msg){
+function showToast(msg,sucesso){
   var t=document.getElementById('save-toast');
-  t.textContent=msg;t.classList.add('show');
+  t.textContent=msg;
+  t.classList.toggle('toast-success',!!sucesso);
+  t.classList.add('show');
   clearTimeout(t._tm);
   t._tm=setTimeout(function(){t.classList.remove('show');},2600);
+}
+
+// Copia texto para a área de transferência, com fallback para navegadores/contextos sem Clipboard API
+function copiarTexto(texto,mensagemSucesso){
+  function ok(){showToast(mensagemSucesso,true);}
+  function fallback(){
+    var ta=document.createElement('textarea');
+    ta.value=texto;
+    ta.style.position='fixed';ta.style.opacity='0';
+    document.body.appendChild(ta);
+    ta.focus();ta.select();
+    try{document.execCommand('copy');ok();}
+    catch(e){alert('Não foi possível copiar automaticamente. Selecione e copie o texto manualmente.');}
+    document.body.removeChild(ta);
+  }
+  if(navigator.clipboard&&navigator.clipboard.writeText){
+    navigator.clipboard.writeText(texto).then(ok).catch(fallback);
+  }else{
+    fallback();
+  }
+}
+
+function gerarEmailCliente(){
+  if(!document.getElementById('resultado').classList.contains('show')){alert('Calcule o estudo primeiro.');return;}
+  var c=lastCalc;
+  var qtd=c.qtdParaGeral||c.qtdTotal||1;
+  var custoUnit=(c.totalFOB_BRL+c.grandTotal)/qtd;
+  var produto=c.prod||'(produto não informado)';
+  var invoice=c.inv||'S/N';
+  var importador=c.imp||'(importador não informado)';
+  var exportador=c.exp||'(exportador não informado)';
+
+  var texto='Assunto: Estudo de Viabilidade — Importação '+produto+' (Invoice '+invoice+')\n\n'
+    +'Prezado(a) '+importador+',\n\n'
+    +'Segue em anexo o Estudo de Viabilidade referente à importação de '+produto+', fornecedor '+exportador+' (Invoice '+invoice+').\n\n'
+    +'Resumo dos principais valores considerados:\n\n'
+    +'- Valor do produto (FOB): US$ '+fN(c.totalFOB_USD)+'\n'
+    +'- Frete internacional: US$ '+fN(c.freteUSD)+'\n'
+    +'- Taxa de câmbio utilizada: R$ '+c.cambio.toFixed(4)+'\n'
+    +'- Valor aduaneiro: R$ '+fN(c.totalCIF_BRL)+'\n'
+    +'- Total de impostos federais e estaduais (II, IPI, PIS, COFINS, Taxa Siscomex, AFRMM, ICMS): R$ '+fN(c.totalImpAll)+'\n'
+    +'- Despesas gerais: R$ '+fN(c.totalDesp)+'\n'
+    +'- Custo unitário de importação: R$ '+fN(custoUnit)+' por unidade (considerando '+qtd.toLocaleString('pt-BR')+' unidade(s))\n\n'
+    +'O custo unitário é calculado somando o valor do produto, os impostos e as despesas, e dividindo pela quantidade total importada.\n\n'
+    +'O estudo completo, com o detalhamento por item e por tributo, está anexo em PDF para sua análise.\n\n'
+    +'Fico à disposição para esclarecer qualquer ponto ou ajustar simulações com outros cenários de câmbio, frete ou quantidade.\n\n'
+    +'Atenciosamente,\n'
+    +'Wellington Santos\n'
+    +'Coordenador de Comércio Exterior\n'
+    +'Ágil Soluções Aduaneiras Ltda.\n'
+    +'(85) 3046-3003 | comercial@agiladuaneira.com.br';
+
+  copiarTexto(texto,'✅ E-mail copiado!');
 }
 
 // Captura o estado atual de TODO o formulário (dados gerais, frete/câmbio,
